@@ -1,8 +1,8 @@
 package api
 
 import (
-    "github.com/gin-gonic/gin"
-    "wedcam-api/pkg/nextcloud"
+	"wedcam-api/pkg/nextcloud"
+	"github.com/gin-gonic/gin"
 )
 
 type UploadResponse struct {
