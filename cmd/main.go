@@ -36,5 +36,5 @@ func main() {
 
     r.POST("/upload", api.ImageUploadHandler)
 
-    r.Run(":8080")
+    r.Run(":8900")
 }
