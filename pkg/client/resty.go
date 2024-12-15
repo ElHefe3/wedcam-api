@@ -1,15 +1,19 @@
-// pkg/client/resty.go
 package clients
 
 import (
-    "github.com/go-resty/resty/v2"
+	"os"
+	"time"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/joho/godotenv"
 )
 
-var Client *resty.Client
 
+var Client *resty.Client
 func InitResty() {
+    godotenv.Load()
+
     Client = resty.New().
-        SetBaseURL("https://your-nextcloud-instance.com").
-        SetHeader("Content-Type", "application/json").
-        SetTimeout(10 * 1000 * 1000)
+        SetBaseURL(os.Getenv("NC_PUBLIC_URL")).
+        SetTimeout(10 * time.Second)
 }

@@ -1,23 +1,23 @@
-// pkg/nextcloud/nextcloud.go
 package nextcloud
 
 import (
+    "bytes"
     "fmt"
     "wedcam-api/pkg/client"
 )
 
-func UploadImage(fileName string, imageData []byte) error {
+func UploadImage(filename string, data []byte) error {
     resp, err := clients.Client.R().
-        SetBody(imageData).
-        SetHeader("Content-Type", "image/jpeg").
-        Put("/remote.php/dav/files/guest/" + fileName)
-    
+        SetBody(bytes.NewReader(data)).
+        Put("/" + filename)
+
     if err != nil {
-        return fmt.Errorf("failed to upload image: %v", err)
+        return fmt.Errorf("failed to upload image: %w", err)
     }
 
-    if resp.StatusCode() != 201 && resp.StatusCode() != 204 {
-        return fmt.Errorf("unexpected status code: %d", resp.StatusCode())
+    if resp.StatusCode() >= 400 {
+        return fmt.Errorf("upload failed with status code %d: %s", 
+            resp.StatusCode(), resp.String())
     }
 
     return nil

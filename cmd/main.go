@@ -1,20 +1,17 @@
-// cmd/main.go
 package main
 
 import (
     "github.com/gin-gonic/gin"
     "wedcam-api/pkg/client"
-	"wedcam-api/pkg/api"
+    "wedcam-api/pkg/api"
 )
 
 func main() {
-    // Initialize Resty client
     clients.InitResty()
 
-    // Initialize Gin router
     r := gin.Default()
 
-	r.Static("/static", "./static")
+    r.Static("/static", "./static")
 
     // CORS middleware
     r.Use(func(c *gin.Context) {
