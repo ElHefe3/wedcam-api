@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <form id="uploadForm">
+        <input type="file" name="image" accept="image/*">
+        <button type="submit">Upload</button>
+    </form>
+
+    <script>
+        document.getElementById('uploadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.querySelector('input[type="file"]');
+            formData.append('image', fileInput.files[0]);
+
+            try {
+                const response = await fetch('http://localhost:8080/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('Upload failed: ' + error);
+            }
+        };
+    </script>
+</body>
+</html>
