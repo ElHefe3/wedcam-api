@@ -1,12 +1,19 @@
 package main
 
 import (
+    "log"
     "github.com/gin-gonic/gin"
     "wedcam-api/pkg/client"
     "wedcam-api/pkg/api"
+    "wedcam-api/pkg/db"
 )
 
 func main() {
+    if err := db.InitDB(); err != nil {
+        log.Fatalf("Failed to initialize database: %v", err)
+    }
+    defer db.DB.Close()
+
     clients.InitResty()
 
     r := gin.Default()
@@ -27,20 +34,16 @@ func main() {
         c.Next()
     })
 
-    // Health check route
     r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{
             "status": "Service is running",
         })
     })
 
-    // Account and QR code routes
     r.POST("/accounts", api.CreateAccountHandler)
     r.POST("/qr-codes", api.GenerateQRCodesHandler)
-    
-    // Image upload route
+
     r.POST("/upload", api.ImageUploadHandler)
 
-    // Start the server
     r.Run(":8900")
 }

@@ -2,8 +2,12 @@ package api
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
+	
+	"wedcam-api/pkg/db"
 	"wedcam-api/pkg/nextcloud"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +27,7 @@ type QRCodeResponse struct {
 }
 
 type QRCode struct {
-    URL         string `json:"url"`
+    URL string `json:"url"`
 }
 
 type UploadResponse struct {
@@ -31,7 +35,6 @@ type UploadResponse struct {
     Message string `json:"message"`
 }
 
-// generateToken creates a random token
 func generateToken() (string, error) {
     bytes := make([]byte, 16)
     if _, err := rand.Read(bytes); err != nil {
@@ -40,7 +43,6 @@ func generateToken() (string, error) {
     return hex.EncodeToString(bytes), nil
 }
 
-// CreateAccountHandler generates a new account with a unique token
 func CreateAccountHandler(c *gin.Context) {
     token, err := generateToken()
     if err != nil {
@@ -48,8 +50,20 @@ func CreateAccountHandler(c *gin.Context) {
         return
     }
 
-    // Here you would store the account token in your database
-    // with active status = true
+    result, err := db.DB.Exec(
+        "INSERT INTO accounts (token, active) VALUES (?, ?)",
+        token, true)
+    if err != nil {
+		fmt.Println(err.Error())
+        c.JSON(500, gin.H{"error": "Failed to create account"})
+        return
+    }
+
+    _, err = result.LastInsertId()
+    if err != nil {
+        c.JSON(500, gin.H{"error": "Failed to get account ID"})
+        return
+    }
 
     c.JSON(200, AccountResponse{
         AccountToken: token,
@@ -57,7 +71,6 @@ func CreateAccountHandler(c *gin.Context) {
     })
 }
 
-// GenerateQRCodesHandler generates the requested number of QR codes
 func GenerateQRCodesHandler(c *gin.Context) {
     accountToken := c.GetHeader("X-Account-Token")
     if accountToken == "" {
@@ -65,11 +78,24 @@ func GenerateQRCodesHandler(c *gin.Context) {
         return
     }
 
-    // Verify account token and active status here
-    // if !isValidAccount(accountToken) {
-    //     c.JSON(401, gin.H{"error": "Invalid or inactive account"})
-    //     return
-    // }
+    var accountID int64
+    var active bool
+    err := db.DB.QueryRow(
+        "SELECT id, active FROM accounts WHERE token = ?",
+        accountToken).Scan(&accountID, &active)
+
+    if err == sql.ErrNoRows {
+        c.JSON(401, gin.H{"error": "Invalid account"})
+        return
+    } else if err != nil {
+        c.JSON(500, gin.H{"error": "Database error"})
+        return
+    }
+
+    if !active {
+        c.JSON(401, gin.H{"error": "Account is inactive"})
+        return
+    }
 
     var req QRCodeRequest
     if err := c.BindJSON(&req); err != nil {
@@ -77,7 +103,7 @@ func GenerateQRCodesHandler(c *gin.Context) {
         return
     }
 
-    if req.Amount <= 0 || req.Amount > 100 { // Add reasonable limits
+    if req.Amount <= 0 || req.Amount > 100 {
         c.JSON(400, gin.H{"error": "Invalid amount requested"})
         return
     }
@@ -90,10 +116,16 @@ func GenerateQRCodesHandler(c *gin.Context) {
             return
         }
 
-        // Store the upload token in your database, associated with the account
-        
+        _, err = db.DB.Exec(
+            "INSERT INTO qr_codes (token, account_id, uploads_allowed, uploads_used) VALUES (?, ?, ?, ?)",
+            uploadToken, accountID, 1, 0)
+        if err != nil {
+            c.JSON(500, gin.H{"error": "Failed to store QR code"})
+            return
+        }
+
         qrCodes[i] = QRCode{
-            URL: os.Getenv("CAMERA_URL")+"?token=" + uploadToken,
+            URL: os.Getenv("CAMERA_URL") + "?token=" + uploadToken,
         }
     }
 
@@ -108,6 +140,34 @@ func ImageUploadHandler(c *gin.Context) {
         c.JSON(401, UploadResponse{
             Success: false,
             Message: "Missing upload token",
+        })
+        return
+    }
+
+    var uploadsUsed int
+    var uploadsAllowed int
+    err := db.DB.QueryRow(
+        "SELECT uploads_used, uploads_allowed FROM qr_codes WHERE token = ?",
+        uploadToken).Scan(&uploadsUsed, &uploadsAllowed)
+
+    if err == sql.ErrNoRows {
+        c.JSON(401, UploadResponse{
+            Success: false,
+            Message: "Invalid upload token",
+        })
+        return
+    } else if err != nil {
+        c.JSON(500, UploadResponse{
+            Success: false,
+            Message: "Database error",
+        })
+        return
+    }
+
+    if uploadsUsed >= uploadsAllowed {
+        c.JSON(400, UploadResponse{
+            Success: false,
+            Message: "Upload token has already been used",
         })
         return
     }
@@ -131,7 +191,6 @@ func ImageUploadHandler(c *gin.Context) {
         return
     }
 
-    // Store the image with association to the upload token
     if err := nextcloud.UploadImage(header.Filename, buffer); err != nil {
         c.JSON(500, UploadResponse{
             Success: false,
@@ -140,7 +199,16 @@ func ImageUploadHandler(c *gin.Context) {
         return
     }
 
-    // Mark the upload token as used in your database
+    _, err = db.DB.Exec(
+        "UPDATE qr_codes SET uploads_used = uploads_used + 1 WHERE token = ?",
+        uploadToken)
+    if err != nil {
+        c.JSON(500, UploadResponse{
+            Success: false,
+            Message: "Failed to update upload status",
+        })
+        return
+    }
 
     c.JSON(200, UploadResponse{
         Success: true,

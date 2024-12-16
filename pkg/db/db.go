@@ -13,11 +13,11 @@ func InitDB() error {
     if err != nil {
         return err
     }
-
-    // Create tables
+	
     schema := `
     CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT UNIQUE,
         active BOOLEAN DEFAULT true,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
