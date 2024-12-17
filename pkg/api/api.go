@@ -118,7 +118,7 @@ func GenerateQRCodesHandler(c *gin.Context) {
 
         _, err = db.DB.Exec(
             "INSERT INTO qr_codes (token, account_id, uploads_allowed, uploads_used) VALUES (?, ?, ?, ?)",
-            uploadToken, accountID, 1, 0)
+            uploadToken, accountID, 20, 0)
         if err != nil {
             c.JSON(500, gin.H{"error": "Failed to store QR code"})
             return
