@@ -67,7 +67,7 @@ func CreateAccountHandler(c *gin.Context) {
 
     c.JSON(200, AccountResponse{
         AccountToken: token,
-        Active:      false,
+        Active:      true,
     })
 }
 
