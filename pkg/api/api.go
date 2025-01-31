@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/base64"
 	"fmt"
 	"os"
 	
@@ -11,6 +12,7 @@ import (
 	"wedcam-api/pkg/nextcloud"
 
 	"github.com/gin-gonic/gin"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 type AccountResponse struct {
@@ -28,6 +30,7 @@ type QRCodeResponse struct {
 
 type QRCode struct {
     URL string `json:"url"`
+    Image string `json:"image"`
 }
 
 type UploadResponse struct {
@@ -109,6 +112,7 @@ func GenerateQRCodesHandler(c *gin.Context) {
     }
 
     qrCodes := make([]QRCode, req.Amount)
+
     for i := 0; i < req.Amount; i++ {
         uploadToken, err := generateToken()
         if err != nil {
@@ -118,14 +122,25 @@ func GenerateQRCodesHandler(c *gin.Context) {
 
         _, err = db.DB.Exec(
             "INSERT INTO qr_codes (token, account_id, uploads_allowed, uploads_used) VALUES (?, ?, ?, ?)",
-            uploadToken, accountID, 20, 0)
+            uploadToken, accountID, 30, 0)
         if err != nil {
             c.JSON(500, gin.H{"error": "Failed to store QR code"})
             return
         }
 
+	qrURL := os.Getenv("CAMERA_URL") + "?token=" + uploadToken
+
+	pngData, err := qrcode.Encode(qrURL, qrcode.Medium, 256)
+	if err != nil {
+	    c.JSON(500, gin.H{"error": "Failed to generate QR code image"})
+	    return
+    	}
+
+	pngBase64 := base64.StdEncoding.EncodeToString(pngData)
+
         qrCodes[i] = QRCode{
-            URL: os.Getenv("CAMERA_URL") + "?token=" + uploadToken,
+            URL: qrURL,
+	    Image: "data:image/png;base64," + pngBase64,
         }
     }
 
@@ -191,7 +206,7 @@ func ImageUploadHandler(c *gin.Context) {
         return
     }
 
-    if err := nextcloud.UploadImage(header.Filename, buffer); err != nil {
+    if err := nextcloud.UploadImage(uploadToken, buffer); err != nil {
         c.JSON(500, UploadResponse{
             Success: false,
             Message: err.Error(),
